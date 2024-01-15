@@ -25,19 +25,25 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationEntryPoint;
 import org.springframework.security.oauth2.server.resource.web.access.BearerTokenAccessDeniedHandler;
 import org.springframework.security.web.SecurityFilterChain;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.security.KeyFactory;
-import java.security.PrivateKey;
+import java.security.*;
+import java.security.cert.CertificateException;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.interfaces.RSAPublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 
-@EnableWebSecurity
 @Configuration
 @AllArgsConstructor
 public class SecurityConfig {
@@ -49,22 +55,14 @@ public class SecurityConfig {
             "/api/comment/**",
             "/authenticated"
     };
-    @Autowired
-    private UserDetailsService userDetailsService;
 
-    //@Value("${security.oauth2.resource.jwt.private.key}")
 
-    private PrivateKey privateKey;
+    @Value("${jwt.public.key}")
+    RSAPublicKey publicKey;
 
-    //@Value("${security.oauth2.resource.jwt.public.key}")
+    @Value("${jwt.private.key}")
+    RSAPrivateKey privateKey;
 
-    private RSAKey publicKey;
-
-    /*@Value("${security.oauth2.resource.jwt.private.key}")
-    private Resource privateKeyResource;
-
-    @Value("${security.oauth2.resource.jwt.public.key}")
-    private Resource publicKeyResource;*/
 
 
     @Bean
@@ -73,8 +71,8 @@ public class SecurityConfig {
     }
 
     @Bean
-    public BCryptPasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(11);
+    PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
     }
 
     @Bean
@@ -93,23 +91,21 @@ public class SecurityConfig {
         return httpSecurity.build();
     }
 
-    public void configureGlobal(AuthenticationManagerBuilder authenticationManagerBuilder) throws Exception {
-        authenticationManagerBuilder.userDetailsService(userDetailsService)
-                .passwordEncoder(passwordEncoder());
-    }
-
     @Bean
-    public AuthenticationProvider authenticationProvider() {
-        var authenticationProvider = new DaoAuthenticationProvider();
-        authenticationProvider.setUserDetailsService(userDetailsService);
-        authenticationProvider.setPasswordEncoder(passwordEncoder());
-        return authenticationProvider;
+    JwtDecoder jwtDecoder() {
+        return NimbusJwtDecoder.withPublicKey(this.publicKey).build();
     }
-
     @Bean
-    public JwtEncoder jwtEncoder(PrivateKey privateKey, RSAKey publicKey) {
-        JWK jwk = new RSAKey.Builder(publicKey).privateKey(privateKey).build();
+    JwtEncoder jwtEncoder() {
+        JWK jwk = new RSAKey.Builder(this.publicKey).privateKey(this.privateKey).build();
         JWKSource<SecurityContext> jwks = new ImmutableJWKSet<>(new JWKSet(jwk));
         return new NimbusJwtEncoder(jwks);
     }
+
+
+    @Bean
+    public RSAPublicKey publicKey(){
+        return publicKey;
+    }
 }
+
